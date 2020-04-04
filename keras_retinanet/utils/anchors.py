@@ -56,7 +56,8 @@ def anchor_targets_bbox(
     annotations_group,
     num_classes,
     negative_overlap=0.4,
-    positive_overlap=0.5
+    positive_overlap=0.5,
+    ignore_overlap=0.3
 ):
     """ Generate anchor targets for bbox detection.
 
@@ -92,7 +93,8 @@ def anchor_targets_bbox(
     for index, (image, annotations) in enumerate(zip(image_group, annotations_group)):
         if annotations['bboxes'].shape[0]:
             # obtain indices of gt annotations with the greatest overlap
-            positive_indices, ignore_indices, argmax_overlaps_inds = compute_gt_annotations(anchors, annotations['bboxes'], negative_overlap, positive_overlap)
+            positive_indices, ignore_indices, argmax_overlaps_inds = \
+                compute_gt_annotations(anchors, annotations, negative_overlap, positive_overlap, ignore_overlap)
 
             labels_batch[index, ignore_indices, -1]       = -1
             labels_batch[index, positive_indices, -1]     = 1
@@ -120,7 +122,8 @@ def compute_gt_annotations(
     anchors,
     annotations,
     negative_overlap=0.4,
-    positive_overlap=0.5
+    positive_overlap=0.5,
+    ignore_overlap=0.3
 ):
     """ Obtain indices of gt annotations with the greatest overlap.
 
@@ -135,8 +138,10 @@ def compute_gt_annotations(
         ignore_indices: indices of ignored anchors
         argmax_overlaps_inds: ordered overlaps indices
     """
+    boxes = annotations['bboxes']
+    labels = annotations['labels']
 
-    overlaps = compute_overlap(anchors.astype(np.float64), annotations.astype(np.float64))
+    overlaps = compute_overlap(anchors.astype(np.float64), boxes.astype(np.float64))
     argmax_overlaps_inds = np.argmax(overlaps, axis=1)
     max_overlaps = overlaps[np.arange(overlaps.shape[0]), argmax_overlaps_inds]
 

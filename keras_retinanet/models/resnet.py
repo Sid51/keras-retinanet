@@ -35,7 +35,7 @@ class ResNetBackbone(Backbone):
     def retinanet(self, *args, **kwargs):
         """ Returns a retinanet model using the correct backbone.
         """
-        return resnet_retinanet(*args, backbone=self.backbone, **kwargs)
+        return resnet_retinanet_two_backbones(*args, backbone=self.backbone, **kwargs)
 
     def download_imagenet(self):
         """ Downloads ImageNet weights and returns path to weights file.
@@ -46,19 +46,21 @@ class ResNetBackbone(Backbone):
 
         filename = resnet_filename.format(depth)
         resource = resnet_resource.format(depth)
-        if depth == 50:
-            checksum = '3e9f4e4f77bbe2c9bec13b53ee1c2319'
-        elif depth == 101:
-            checksum = '05dc86924389e5b401a9ea0348a3213c'
-        elif depth == 152:
-            checksum = '6ee11ef2b135592f8031058820bb9e71'
+        # if depth == 50:
+        #     checksum = '3e9f4e4f77bbe2c9bec13b53ee1c2319'
+        # elif depth == 101:
+        #     checksum = '05dc86924389e5b401a9ea0348a3213c'
+        # elif depth == 152:
+        #     checksum = '6ee11ef2b135592f8031058820bb9e71'
 
-        return get_file(
-            filename,
-            resource,
-            cache_subdir='models',
-            md5_hash=checksum
-        )
+        # return get_file(
+        #     filename,
+        #     resource,
+        #     cache_subdir='models',
+        #     md5_hash=None
+        # )
+
+        return "/Users/sid51/Desktop/keras-retinanet/snapshots/ResNet-50-model.keras.h5"
 
     def validate(self):
         """ Checks whether the backbone string is correct.
@@ -73,6 +75,56 @@ class ResNetBackbone(Backbone):
         """ Takes as input an image and prepares it for being passed through the network.
         """
         return preprocess_image(inputs, mode='caffe')
+
+
+def resnet_retinanet_two_backbones(num_classes, backbone='resnet50', inputs=None, modifier=None, **kwargs):
+    """ Constructs a retinanet model using two resnet backbones fot each input image.
+
+    Args
+        num_classes: Number of classes to predict.
+        backbone: Which backbone to use (one of ('resnet50', 'resnet101', 'resnet152')).
+        inputs: The inputs to the network (defaults to a Tensor of shape (None, None, 3)).
+        modifier: A function handler which can modify the backbone before using it in retinanet (this can be used to freeze backbone layers for example).
+
+    Returns
+        RetinaNet model with a ResNet backbone.
+    """
+
+    # choose default input
+    if inputs is None:
+        if keras.backend.image_data_format() == 'channels_first':
+            image1__inputs = keras.layers.Input(shape=(3, None, None))
+            image2_inputs = keras.layers.Input(shape=(3, None, None))
+        else:
+            image1__inputs = keras.layers.Input(shape=(None, None, 3))
+            image2_inputs = keras.layers.Input(shape=(None, None, 3))
+
+    # create two backbones
+    if 'resnet50' in backbone:
+        resnet1 = keras_resnet.models.ResNet50(image1__inputs, include_top=False, freeze_bn=True)
+        resnet2 = keras_resnet.models.ResNet50(image2_inputs, include_top=False, freeze_bn=True)
+    elif 'resnet101' in backbone:
+        resnet1 = keras_resnet.models.ResNet101(image1__inputs, include_top=False, freeze_bn=True)
+        resnet2 = keras_resnet.models.ResNet101(image2_inputs, include_top=False, freeze_bn=True)
+    elif 'resnet152' in backbone:
+        resnet1 = keras_resnet.models.ResNet152(image1__inputs, include_top=False, freeze_bn=True)
+        resnet2 = keras_resnet.models.ResNet152(image2_inputs, include_top=False, freeze_bn=True)
+    else:
+        raise ValueError('Backbone (\'{}\') is invalid.'.format(backbone))
+
+    # invoke modifier if given
+    if modifier:
+        resnet1 = modifier(resnet1)
+        resnet2 = modifier(resnet2)
+
+    for layer in resnet2.layers:
+        layer.name += "_backbone2"
+    for layer in resnet1.layers:
+        layer.name += "_backbone1"
+
+    # create the full model
+    return retinanet.retinanet_two_backbones(inputs=[image1__inputs, image2_inputs], num_classes=num_classes,
+                                             backbone_layers=[resnet1.outputs[1:], resnet2.outputs[1:]], **kwargs)
 
 
 def resnet_retinanet(num_classes, backbone='resnet50', inputs=None, modifier=None, **kwargs):

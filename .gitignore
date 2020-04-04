@@ -12,6 +12,7 @@ __pycache__/
 .eggs/
 /sdist/
 /wheels/
+/diactivate/
 /*.egg-info/
 .installed.cfg
 *.egg
@@ -21,3 +22,12 @@ __pycache__/
 .coverage.*
 coverage.xml
 *.cover
+
+# Trash
+/venv/
+*.c
+*.so
+*.idea
+*.DS_Store
+*.ipynb
+

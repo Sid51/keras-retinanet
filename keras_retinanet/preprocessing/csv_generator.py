@@ -69,12 +69,14 @@ def _read_annotations(csv_reader, classes):
         line += 1
 
         try:
-            img_file, x1, y1, x2, y2, class_name = row[:6]
+            img_file1, img_file2, x1, y1, x2, y2, class_name = row[:7]
         except ValueError:
-            raise_from(ValueError('line {}: format should be \'img_file,x1,y1,x2,y2,class_name\' or \'img_file,,,,,\''.format(line)), None)
+            raise_from(ValueError('line {}: format should be \'img_file1,img_file2,x1,y1,x2,y2,class_name\' '
+                                  'or \'img_file1,img_file2,,,,,\''.format(line)), None)
 
-        if img_file not in result:
-            result[img_file] = []
+        img_key = img_file1 + "@" + img_file2
+        if img_key not in result:
+            result[img_key] = []
 
         # If a row contains only an image path, it's an image without annotations.
         if (x1, y1, x2, y2, class_name) == ('', '', '', '', ''):
@@ -95,7 +97,7 @@ def _read_annotations(csv_reader, classes):
         if class_name not in classes:
             raise ValueError('line {}: unknown class name: \'{}\' (classes: {})'.format(line, class_name, classes))
 
-        result[img_file].append({'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': class_name})
+        result[img_key].append({'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': class_name})
     return result
 
 
@@ -108,7 +110,7 @@ def _open_for_csv(path):
     if sys.version_info[0] < 3:
         return open(path, 'rb')
     else:
-        return open(path, 'r', newline='')
+        return open(path, 'r', newline='', encoding='utf-8-sig')
 
 
 class CSVGenerator(Generator):
@@ -195,17 +197,28 @@ class CSVGenerator(Generator):
         """
         return os.path.join(self.base_dir, self.image_names[image_index])
 
+    def two_images_path(self, image_index):
+        """ Returns the image paths of two images for image_index.
+        """
+        img1, img2 = self.image_names[image_index].split('@')
+        img1_path = os.path.join(self.base_dir, img1)
+        img2_path = os.path.join(self.base_dir, img2)
+        return img1_path, img2_path
+
     def image_aspect_ratio(self, image_index):
         """ Compute the aspect ratio for an image with image_index.
         """
         # PIL is fast for metadata
-        image = Image.open(self.image_path(image_index))
+        image = Image.open(self.two_images_path(image_index)[0])
         return float(image.width) / float(image.height)
 
     def load_image(self, image_index):
-        """ Load an image at the image_index.
+        """ Load two images at the image_index.
         """
-        return read_image_bgr(self.image_path(image_index))
+        img1_path, img2_path = self.two_images_path(image_index)
+        img1 = read_image_bgr(img1_path)
+        img2 = read_image_bgr(img2_path)
+        return [img1, img2]
 
     def load_annotations(self, image_index):
         """ Load annotations for an image_index.

@@ -53,7 +53,7 @@ def backbone(backbone_name):
         from .densenet import DenseNetBackbone as b
     elif 'seresnext' in backbone_name or 'seresnet' in backbone_name or 'senet' in backbone_name:
         from .senet import SeBackbone as b
-    elif 'resnet' in backbone_name:
+    elif 'resnet' in backbone_name or 'two-backbones' in backbone_name:
         from .resnet import ResNetBackbone as b
     elif 'mobilenet' in backbone_name:
         from .mobilenet import MobileNetBackbone as b

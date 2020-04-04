@@ -32,12 +32,12 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "keras_retinanet.bin"
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
-from .. import layers  # noqa: F401
+# from .. import layers  # noqa: F401
 from .. import losses
 from .. import models
 from ..callbacks import RedirectModel
 from ..callbacks.eval import Evaluate
-from ..models.retinanet import retinanet_bbox
+from ..models.retinanet import retinanet_bbox, retinanet_bbox_two_backbones
 from ..preprocessing.csv_generator import CSVGenerator
 from ..preprocessing.kitti import KittiGenerator
 from ..preprocessing.open_images import OpenImagesGenerator
@@ -76,6 +76,32 @@ def model_with_weights(model, weights, skip_mismatch):
     return model
 
 
+def model_with_weights_two_backbones(model, weights, skip_mismatch):
+    """  Load weights fot two-backbones model
+
+    :param model            :  the model to load the weights for.
+    :param weights          :  the weights to load
+    :param skip_mismatch    :  If True, skips layers whose shape of weights doesn't match with the model.
+    :return:                :  model with weights
+    """
+    for prefix in ['_backbone1', '_backbone2']:
+        layers_to_rename = []
+
+        for layer in model.layers:
+            if layer.name.endswith(prefix):
+                layer.name = layer.name[:-10]
+                layers_to_rename.append(layer.name)
+
+        if weights is not None:
+            model.load_weights(weights, by_name=True, skip_mismatch=skip_mismatch)
+
+        for layer in model.layers:
+            if layer.name in layers_to_rename:
+                layer.name += prefix
+
+    return model
+
+
 def create_models(backbone_retinanet, num_classes, weights, multi_gpu=0,
                   freeze_backbone=False, lr=1e-5, config=None):
     """ Creates three models (model, training_model, prediction_model).
@@ -108,14 +134,17 @@ def create_models(backbone_retinanet, num_classes, weights, multi_gpu=0,
     if multi_gpu > 1:
         from keras.utils import multi_gpu_model
         with tf.device('/cpu:0'):
-            model = model_with_weights(backbone_retinanet(num_classes, num_anchors=num_anchors, modifier=modifier), weights=weights, skip_mismatch=True)
+            model = model_with_weights(backbone_retinanet(num_classes, num_anchors=num_anchors, modifier=modifier),
+                                       weights=weights, skip_mismatch=True)
         training_model = multi_gpu_model(model, gpus=multi_gpu)
     else:
-        model          = model_with_weights(backbone_retinanet(num_classes, num_anchors=num_anchors, modifier=modifier), weights=weights, skip_mismatch=True)
+        model = backbone_retinanet(num_classes, num_anchors=num_anchors, modifier=modifier)
+
+        model = model_with_weights_two_backbones(model, weights, skip_mismatch=True)
         training_model = model
 
     # make prediction model
-    prediction_model = retinanet_bbox(model=model, anchor_params=anchor_params)
+    prediction_model = retinanet_bbox_two_backbones(model=model, anchor_params=anchor_params)
 
     # compile model
     training_model.compile(
@@ -198,9 +227,6 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
         cooldown   = 0,
         min_lr     = 0
     ))
-
-    if args.tensorboard_dir:
-        callbacks.append(tensorboard_callback)
 
     return callbacks
 
